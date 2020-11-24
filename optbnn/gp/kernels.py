@@ -199,25 +199,6 @@ class RBF(Stationary):
         return res
 
 
-class RationalCubic(Stationary):
-    """The rational cubic kernel"""
-    def K(self, X, X2=None, presliced=False):
-        if not presliced:
-            X, X2 = self._slice(X, X2)
-        return torch.pow(1 + self.square_dist(X, X2), -3)
-
-
-class LocallyPeriodic(Stationary):
-    """The rational cubic kernel"""
-    def K(self, X, X2=None, presliced=False):
-        if not presliced:
-            X, X2 = self._slice(X, X2)
-        r2 = self.square_dist(X, X2)
-        r1 = (r2 + 1e-12)**0.5
-        res = torch.exp(-2 * (torch.sin(np.pi * r1))**2 / 25.) * torch.exp(- r2 / 2)
-        return res
-
-
 class Exponential(Stationary):
     """
     The Exponential kernel
@@ -269,16 +250,29 @@ class Matern52(Stationary):
 class Periodic(Stationary):
     """Periodic kernel"""
     def __init__(self, input_dim, variance=1.0, lengthscales=None,
-                 active_dims=None, ARD=False, name=None, scale=1.0):
+                 active_dims=None, ARD=False, name=None, period=1.0):
         super(Periodic, self).__init__(input_dim, variance, lengthscales,
                                        active_dims, ARD, name)
-        self.scale = scale
+        self.period = parameter.PositiveParam(period)
+
+    def square_dist(self, X, X2):
+        Xs = (X**2).sum(1)
+
+        if X2 is None:
+            dist = -2 * torch.matmul(X, X.t())
+            dist += Xs.view(-1, 1) + Xs.view(1, -1)
+            return dist
+
+        X2s = (X2**2).sum(1)
+        dist = -2 * torch.matmul(X, X2.t())
+        dist += Xs.view(-1, 1) + X2s.view(1, -1)
+        return dist
 
     def K(self, X, X2=None, presliced=False):
         if not presliced:
             X, X2 = self._slice(X, X2)
-        r = self.euclid_dist(X, X2)
-        return torch.exp(-2*(torch.sin(np.pi*r))**2 / self.scale)
+        r = np.pi * self.square_dist(X, X2) ** 0.5 / self.period.get()
+        return self.variance.get() * torch.exp(-2 * torch.sin(r)**2 / (self.lengthscales.get()**2))
 
 
 class Cosine(Stationary):
