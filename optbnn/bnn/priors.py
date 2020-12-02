@@ -308,9 +308,10 @@ class OptimNormFlowPrior(PriorModule):
         self.model = model # type: NormFlowsLinearReparameterization
         ### Fix the model
         self.model.requires_grad_(False)
-
-        data = torch.load(saved_path, map_location=torch.device(self.device))
-        self.model.load_state_dict(data)
+        
+        if saved_path is not None:
+            data = torch.load(saved_path, map_location=torch.device(self.device))
+            self.model.load_state_dict(data)
 
     def logp(self, net: nn.Module):
         """Note: this is highly customized for the MLP case"""
